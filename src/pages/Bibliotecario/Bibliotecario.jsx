@@ -457,6 +457,12 @@ export default function Bibliotecario() {
   const alunos = filtrados.filter((u) => u.tipo === "aluno");
   const funcionarios = filtrados.filter((u) => u.tipo === "funcionario");
   const bibliotecarios = filtrados.filter((u) => u.tipo === "bibliotecario");
+  const formatSerieSala = (u) => {
+    const serieAtual = u.serie || "";
+    const salaAtual = u.sala || "";
+    if (!serieAtual && !salaAtual) return "-";
+    return salaAtual ? `${serieAtual} ${salaAtual}` : serieAtual;
+  };
 
   return (
     <div className="bib-page">
@@ -832,11 +838,11 @@ export default function Bibliotecario() {
             {/* Alunos */}
             <UserTable
               titulo="Alunos"
-              columns={["Nome", "Turma", "Senha", "Ações"]}
+              columns={["Nome", "Série/Sala", "Senha", "Ações"]}
               renderRow={(u) => (
                 <>
                   <td>{u.nome}</td>
-                  <td>{u.turma || "-"}</td>
+                  <td>{formatSerieSala(u)}</td>
                   <SenhaCell
                     u={u}
                     showPassMap={showPassMap}

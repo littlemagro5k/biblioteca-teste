@@ -1,14 +1,19 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./Login.css";
-import { loginBibliotecario } from "../../services/api";
+import {
+  loginBibliotecario,
+  registerStudent,
+  loginStudent,
+} from "../../services/api";
 
 export default function Login() {
   const [modo, setModo] = useState("login");
   const [tipo, setTipo] = useState("aluno");
   const [nome, setNome] = useState("");
-  const [turma, setTurma] = useState("");
+  const [serie, setSerie] = useState("");
+  const [sala, setSala] = useState("");
   const [funcao, setFuncao] = useState("");
   const [turno, setTurno] = useState("");
   const [senha, setSenha] = useState("");
@@ -23,6 +28,24 @@ export default function Login() {
     "Secretaria",
     "Auxiliar",
   ];
+  const series = ["6º", "7º", "8º", "9º", "1º", "2º", "3º", "EJA"];
+  const salas = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+
+  useEffect(() => {
+    if (tipo !== "aluno") {
+      setSerie("");
+      setSala("");
+    }
+    if (tipo !== "funcionario") {
+      setFuncao("");
+    }
+    if (tipo !== "bibliotecario") {
+      setCodigo("");
+    }
+    if (tipo === "aluno") {
+      setTurno("");
+    }
+  }, [tipo]);
 
   function validarNomeCompleto(nomeAtual, tipoAtual = tipo) {
     if (tipoAtual === "bibliotecario") {
@@ -38,30 +61,79 @@ export default function Login() {
     if (!senha || senha.length < 4)
       return alert("A senha deve ter pelo menos 4 caracteres.");
 
+    const nomeFormatado = nome.trim();
+    const nomeLower = nomeFormatado.toLowerCase();
+
     const key = "leiasj_users_v1";
     const users = JSON.parse(localStorage.getItem(key)) || [];
 
     if (modo === "cadastro") {
+      if (tipo === "aluno") {
+        if (!serie || !sala)
+          return alert("Selecione a série e a sala do aluno.");
+
+        try {
+          const cadastro = await registerStudent({
+            nomeCompleto: nomeFormatado,
+            serie,
+            sala,
+            senha,
+          });
+          const alunoCadastrado = cadastro?.aluno || null;
+          const nomeAluno = alunoCadastrado?.nomeCompleto ?? nomeFormatado;
+          const serieAluno = alunoCadastrado?.serie ?? serie;
+          const salaAluno = alunoCadastrado?.sala ?? sala;
+          const novoAluno = {
+            id: alunoCadastrado?.id ?? Date.now(),
+            nome: nomeAluno,
+            tipo: "aluno",
+            senha,
+            serie: serieAluno,
+            sala: salaAluno,
+            funcao: "",
+            turno: "",
+            codigo: "",
+          };
+          const nextUsers = [
+            ...users.filter(
+              (u) =>
+                !(
+                  u.tipo === "aluno" &&
+                  (u.nome || "").toLowerCase() === nomeAluno.toLowerCase()
+                )
+            ),
+            novoAluno,
+          ];
+          localStorage.setItem(key, JSON.stringify(nextUsers));
+          alert(cadastro?.mensagem || "Cadastro realizado!");
+          setModo("login");
+        } catch (error) {
+          alert(error.message || "Falha ao cadastrar aluno.");
+        }
+        return;
+      }
+
       if (tipo === "bibliotecario" && codigo !== "LEIA-SJ-2025")
         return alert("Código de bibliotecário inválido.");
 
       const existe = users.find(
-        (u) => u.nome.toLowerCase() === nome.toLowerCase() && u.tipo === tipo
+        (u) => (u.nome || "").toLowerCase() === nomeLower && u.tipo === tipo
       );
       if (existe) return alert("Usuário já cadastrado.");
 
       const novo = {
         id: Date.now(),
-        nome,
+        nome: nomeFormatado,
         tipo,
         senha,
-        turma,
+        serie: "",
+        sala: "",
         funcao,
         turno,
         codigo,
       };
-      users.push(novo);
-      localStorage.setItem(key, JSON.stringify(users));
+      const nextUsers = [...users, novo];
+      localStorage.setItem(key, JSON.stringify(nextUsers));
       alert("Cadastro realizado!");
       setModo("login");
       return;
@@ -69,28 +141,29 @@ export default function Login() {
 
     if (tipo === "bibliotecario") {
       try {
-        await loginBibliotecario(nome, senha);
+        await loginBibliotecario(nomeFormatado, senha);
       } catch (error) {
         return alert(error.message || "Falha ao realizar login.");
       }
 
       let user = users.find(
-        (u) => u.nome.toLowerCase() === nome.toLowerCase() && u.tipo === tipo
+        (u) => (u.nome || "").toLowerCase() === nomeLower && u.tipo === tipo
       );
 
       if (!user) {
         user = {
           id: Date.now(),
-          nome,
+          nome: nomeFormatado,
           tipo,
           senha,
-          turma,
+          serie: "",
+          sala: "",
           funcao,
           turno,
           codigo,
         };
-        users.push(user);
-        localStorage.setItem(key, JSON.stringify(users));
+        const nextUsers = [...users, user];
+        localStorage.setItem(key, JSON.stringify(nextUsers));
       }
 
       localStorage.setItem("leiasj_logged_user", JSON.stringify(user));
@@ -98,9 +171,48 @@ export default function Login() {
       return;
     }
 
+    if (tipo === "aluno") {
+      try {
+        const aluno = await loginStudent(nomeFormatado, senha);
+        const nomeAluno = aluno?.nomeCompleto ?? nomeFormatado;
+        const serieAluno = aluno?.serie ?? serie;
+        const salaAluno = aluno?.sala ?? sala;
+        const usuarioLogado = {
+          id: aluno?.id ?? Date.now(),
+          nome: nomeAluno,
+          tipo: "aluno",
+          senha,
+          serie: serieAluno,
+          sala: salaAluno,
+          funcao: "",
+          turno: "",
+          codigo: "",
+        };
+        const nextUsers = [
+          ...users.filter(
+            (u) =>
+              !(
+                u.tipo === "aluno" &&
+                (u.nome || "").toLowerCase() === nomeAluno.toLowerCase()
+              )
+          ),
+          usuarioLogado,
+        ];
+        localStorage.setItem(key, JSON.stringify(nextUsers));
+        localStorage.setItem(
+          "leiasj_logged_user",
+          JSON.stringify(usuarioLogado)
+        );
+        navigate("/usuario");
+      } catch (error) {
+        alert(error.message || "Falha ao realizar login.");
+      }
+      return;
+    }
+
     const user = users.find(
       (u) =>
-        u.nome.toLowerCase() === nome.toLowerCase() &&
+        (u.nome || "").toLowerCase() === nomeLower &&
         u.senha === senha &&
         u.tipo === tipo
     );
@@ -120,9 +232,7 @@ export default function Login() {
         <div className="btn-group w-100 mb-3" role="group">
           <button
             type="button"
-            className={`btn ${
-              modo === "login" ? "ativo" : "btn-outline-warning"
-            }`}
+            className={`btn ${modo === "login" ? "ativo" : "btn-outline-warning"}`}
             onClick={() => setModo("login")}
           >
             Entrar
@@ -184,38 +294,30 @@ export default function Login() {
             <div className="mb-3 d-flex justify-content-between gap-2">
               <select
                 className="form-select"
-                value={turma.split("º")[0] || ""}
-                onChange={(e) => {
-                  const letra = turma.split("º")[1] || "";
-                  setTurma(`${e.target.value}º${letra}`);
-                }}
-                required
+                value={serie}
+                onChange={(e) => setSerie(e.target.value)}
+                required={modo === "cadastro"}
               >
                 <option value="">Série</option>
-                {["6", "7", "8", "9", "1", "2", "3", "EJA"].map((num) => (
-                  <option key={num} value={num}>
-                    {num}º
+                {series.map((opcao) => (
+                  <option key={opcao} value={opcao}>
+                    {opcao}
                   </option>
                 ))}
               </select>
 
               <select
                 className="form-select"
-                value={turma.replace(/^[0-9EJAº]+/, "") || ""}
-                onChange={(e) => {
-                  const numero = turma.split("º")[0] || "";
-                  setTurma(`${numero}º${e.target.value}`);
-                }}
-                required
+                value={sala}
+                onChange={(e) => setSala(e.target.value)}
+                required={modo === "cadastro"}
               >
-                <option value="">Turma</option>
-                {["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"].map(
-                  (letra) => (
-                    <option key={letra} value={letra}>
-                      {letra}
-                    </option>
-                  )
-                )}
+                <option value="">Sala</option>
+                {salas.map((letra) => (
+                  <option key={letra} value={letra}>
+                    {letra}
+                  </option>
+                ))}
               </select>
             </div>
           )}
@@ -226,7 +328,7 @@ export default function Login() {
                 className="form-select mb-3"
                 value={funcao}
                 onChange={(e) => setFuncao(e.target.value)}
-                required
+                required={modo === "cadastro"}
               >
                 <option value="">Selecione a função</option>
                 {funcoes.map((f) => (
