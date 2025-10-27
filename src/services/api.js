@@ -63,3 +63,17 @@ export async function deleteBook(id) {
     method: 'DELETE',
   });
 }
+
+export async function registerStudent({ nomeCompleto, serie, sala, senha }) {
+  return request('/api/alunos', {
+    method: 'POST',
+    body: { nomeCompleto, serie, sala, senha },
+  });
+}
+
+export async function loginStudent(nomeCompleto, senha) {
+  return request('/api/alunos/login', {
+    method: 'POST',
+    body: { nomeCompleto, senha },
+  });
+}
